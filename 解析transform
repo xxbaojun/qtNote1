@@ -1,0 +1,33 @@
+
+    //--- 解析transform 部分
+    QString qstrTrans = " rotate( 0 , 1.234e-1 , 647.882 )  scale ( 1.12753 ,1.1605 ) translate(-11.0481,-86.3954)";
+    qstrTrans = qstrTrans.replace(" ",""); //去除所有空格
+    //qstrTrans = qstrTrans.simplified(); 去除两边空格 和多余的空格
+    int iBegin = 0;
+    int iEnd = qstrTrans.indexOf(')')+1;
+    while(true)
+    {
+        QString tmp = qstrTrans.mid(iBegin,iEnd-iBegin);
+        iBegin=iEnd;
+        iEnd = qstrTrans.indexOf(')',iBegin)+1;
+
+        QString transName= tmp.left(tmp.indexOf('('));
+        QString transValue = tmp.right(tmp.length() - tmp.indexOf('('));
+        if(transName == "rotate")
+        {
+            QStringList trans_list = transValue.split(QRegExp( "[(),]" ), QString::SkipEmptyParts);
+            QStringList::Iterator str_iter = trans_list.begin();
+            float num1 = (*str_iter).toFloat();
+            float x1=0,y1=0;
+            str_iter++;
+            if(str_iter!=trans_list.end())
+            {
+                x1 = (*str_iter).toFloat();
+                x1 = x1+2;
+                str_iter++;
+                y1 = (*str_iter).toFloat();
+            }
+        }
+
+        if(iEnd<=0)break;
+    }
