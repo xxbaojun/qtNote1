@@ -1,33 +1,233 @@
+#ifndef QTRANSFORM_LOCAL_H
+#define QTRANSFORM_LOCAL_H
 
-    //--- 解析transform 部分
-    QString qstrTrans = " rotate( 0 , 1.234e-1 , 647.882 )  scale ( 1.12753 ,1.1605 ) translate(-11.0481,-86.3954)";
-    qstrTrans = qstrTrans.replace(" ",""); //去除所有空格
-    //qstrTrans = qstrTrans.simplified(); 去除两边空格 和多余的空格
+#include <QTransform>
+#include <QString>
+#include <string>
+#include <vector>
+#include <map>
+#include <iostream>
+#include <math.h>
+
+void testTransForm()
+{
+    QTransform qtrans;
+    qtrans.scale(2,1);
+    qtrans.translate(2.5,0);
+    double real_x,real_y;
+    qtrans.map((double)10,(double)20,&real_x,&real_y);
+    std::cout<<real_x<<real_y<<std::endl;
+}
+
+bool isZero(double x)
+{
+    if(x<0.00001 && x>-0.00001)return true;
+    return false;
+}
+
+//start_x,start_y 是图元的左上点，
+//width和height是图元的宽和高，如果是线的话，height为0，如果是点的话，这两个都为0
+//new_center_x,new_center_y是待返回的图元中心点的的坐标
+//_sx,_sy是待返回的图元的x轴缩放和y轴缩放
+//_angle是待返回的图元旋转角度
+void parse_SvgTransform(float start_x,float start_y,float width,float height,const QString & qstrTrans,float & new_center_x, float & new_center_y, float& _sx,float & _sy, float & _angle)
+{
+    float old_width = width;                   //图元初始宽度
+    float old_height = height;
+    float old_youshang_x = start_x + width;    //图元初始右上点x轴坐标
+    float old_youshang_y = start_y;
+    float old_zuoxia_x = start_x;              //图元初始左下点x轴坐标
+    float old_zuoxia_y = start_y + height;
+    float old_center_x = start_x + width/2;    //图元初始中心点坐标
+    float old_center_y = start_y + height/2;
+
+    QTransform qtrans;
+    QString tmp;
+    QString transName;
+    QString transValue;
+    QStringList trans_list;
+    QStringList::Iterator str_iter;
+    float tmpValue[6];
+    int valueNum = 0;
+
+
     int iBegin = 0;
     int iEnd = qstrTrans.indexOf(')')+1;
     while(true)
     {
-        QString tmp = qstrTrans.mid(iBegin,iEnd-iBegin);
+        tmp = qstrTrans.mid(iBegin,iEnd-iBegin);
         iBegin=iEnd;
         iEnd = qstrTrans.indexOf(')',iBegin)+1;
 
-        QString transName= tmp.left(tmp.indexOf('('));
-        QString transValue = tmp.right(tmp.length() - tmp.indexOf('('));
-        if(transName == "rotate")
+        transName= tmp.left(tmp.indexOf('('));
+        transValue = tmp.right(tmp.length() - tmp.indexOf('('));
+        transName = transName.replace(" ","");//去除所有空格
+
+        trans_list = transValue.split(QRegExp( "[(), ]" ), QString::SkipEmptyParts);
+        str_iter = trans_list.begin();
+        valueNum = 0;
+        while(str_iter!=trans_list.end())
         {
-            QStringList trans_list = transValue.split(QRegExp( "[(),]" ), QString::SkipEmptyParts);
-            QStringList::Iterator str_iter = trans_list.begin();
-            float num1 = (*str_iter).toFloat();
-            float x1=0,y1=0;
-            str_iter++;
-            if(str_iter!=trans_list.end())
+            tmp = *str_iter;
+            tmp = tmp.replace(" ","");
+            if(tmp.length()>=1)
             {
-                x1 = (*str_iter).toFloat();
-                x1 = x1+2;
-                str_iter++;
-                y1 = (*str_iter).toFloat();
+                tmpValue[valueNum] = tmp.toFloat();
+                valueNum++;
             }
+            str_iter++;
         }
 
+        if(transName == "translate")
+        {
+            if(valueNum==1)
+            {
+                qtrans.translate( tmpValue[0] , (double)0 );
+            }
+            else
+                qtrans.translate( tmpValue[0] , tmpValue[1] );
+        }
+        else if(transName == "scale")
+        {
+            if(valueNum==1)
+            {
+                qtrans.scale( tmpValue[0] , tmpValue[0] );
+            }
+            else
+                qtrans.scale( tmpValue[0] , tmpValue[1] );
+        }
+        else if(transName == "rotate")
+        {
+            if(valueNum==1)
+            {
+                qtrans.rotate( tmpValue[0] );
+            }
+            else
+            {
+                qtrans.translate( tmpValue[1] , tmpValue[2] );
+                qtrans.rotate( tmpValue[0] );
+                qtrans.translate( -tmpValue[1] , -tmpValue[2] );
+            }
+        }
+        else if(transName == "matrix")
+        {
+            QTransform matrix( tmpValue[0], tmpValue[1], tmpValue[2], tmpValue[3], tmpValue[4], tmpValue[5] );
+            qtrans *= matrix;
+        }
         if(iEnd<=0)break;
     }
+
+    //下面计算新的中心点坐标，缩放，和旋转角度
+    if(isZero(old_width) && isZero(old_height))
+    {
+        double _new_center_x;
+        double _new_center_y;
+        qtrans.map(old_center_x,old_center_y, &_new_center_x, &_new_center_y);
+
+        new_center_x = _new_center_x;
+        new_center_y = _new_center_y;
+        _sx = 1;
+        _sy = 1;
+        _angle = 0;
+        return;
+    }
+    double new_zuoshang_x;
+    double new_zuoshang_y;
+    qtrans.map(start_x,start_y, &new_zuoshang_x, &new_zuoshang_y);
+    double new_youshang_x;
+    double new_youshang_y;
+    qtrans.map(old_youshang_x,old_youshang_y, &new_youshang_x, &new_youshang_y);
+    double new_zuoxia_x;
+    double new_zuoxia_y;
+    qtrans.map(old_zuoxia_x,old_zuoxia_y, &new_zuoxia_x, &new_zuoxia_y);
+    double _new_center_x;
+    double _new_center_y;
+    qtrans.map(old_center_x,old_center_y, &_new_center_x, &_new_center_y);
+
+    new_center_x = _new_center_x;
+    new_center_y = _new_center_y;
+    double new_width = sqrt( (new_youshang_x-new_zuoshang_x)*(new_youshang_x-new_zuoshang_x) + (new_youshang_y - new_zuoshang_y)*(new_youshang_y - new_zuoshang_y) );
+    if(isZero( old_width ))
+    {
+        _sx = 1;
+    }
+    else
+        _sx = new_width/old_width;
+    double new_height = sqrt( (new_zuoxia_x-new_zuoshang_x)*(new_zuoxia_x-new_zuoshang_x) + (new_zuoxia_y - new_zuoshang_y)*(new_zuoxia_y - new_zuoshang_y) );
+    if(isZero( old_height ))
+    {
+        _sy = 1;
+    }
+    else
+        _sy = new_height/old_height;
+
+    if(! isZero( old_width ))
+    {
+        if(isZero(new_youshang_x - new_zuoshang_x))
+        {//水平变成垂直
+            if(new_youshang_y - new_zuoshang_y > 0)
+            {
+                _angle = 90;
+            }
+            else
+            {
+                _angle = -90;
+            }
+        }
+        else
+        {
+            if(isZero(new_youshang_y - new_zuoshang_y))
+            {
+                if(new_youshang_x - new_zuoshang_x>0)
+                {
+                    _angle = 0;
+                }
+                else
+                    _angle = 180;
+            }
+            else
+            {
+                _angle = atan((new_youshang_y - new_zuoshang_y)/(new_youshang_x - new_zuoshang_x));
+                _angle = _angle*180/3.1415926536;
+            }
+        }
+    }
+    else
+    {
+        if(isZero(new_zuoxia_y - new_zuoshang_y))
+        {//垂直变成水平
+            if(new_zuoxia_x - new_zuoshang_x > 0)
+            {
+                _angle = -90;
+            }
+            else
+            {
+                _angle = 90;
+            }
+        }
+        else
+        {
+            if(isZero(new_zuoxia_x - new_zuoshang_x))
+            {
+                if(new_zuoxia_y - new_zuoshang_y > 0)
+                {
+                    _angle = 0;
+                }
+                else
+                {
+                    _angle = 180;
+                }
+            }
+            else
+            {
+                _angle = -atan((new_zuoxia_x - new_zuoshang_x)/(new_zuoxia_y - new_zuoshang_y));
+                _angle = _angle*180/3.1415926536;
+            }
+        }
+    }
+
+}
+
+
+
+#endif // QTRANSFORM_LOCAL_H
